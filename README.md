@@ -30,9 +30,6 @@ This is an official [**PyTorch**](https://pytorch.org/) implementation of [**Mon
 We run our experiments using PyTorch >= 1.5.0, CUDA=10.2, Python=3.8.x
 
 
-## Training
-*Under construction*
-
 ## Evaluation
 
 To evaluate MonoDEVSNet models, provide the model/weights folder path and a configuration file name in the command line arguments.
