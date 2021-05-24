@@ -1,3 +1,32 @@
+# Author: Akhil Gurram
+# Build on top of the monodepth2
+# (Automatically pulled from git repo, monodepth2 source code is not included in this repository)
+# This is the training script of the MonoDEVSNet framework.
+# MonoDEVSNet: Monocular Depth Estimation through Virtual-world Supervision and Real-world SfM Self-Supervision
+# https://arxiv.org/abs/2103.12209
+
+# MIT License
+#
+# Copyright (c) 2021 Huawei Technologies Duesseldorf GmbH
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 import argparse
 import os
 import time
@@ -167,7 +196,7 @@ class Evaluation(object):
             os.makedirs(self.opt.log_dir)
 
         print("\nFiles are saved to:\n  ", self.opt.log_dir)
-        print("Training is using:  ", self.device)
+        print("Running scripts on :  ", self.device)
 
         # Images path list
         self.im_path_list = []

@@ -1,6 +1,6 @@
 HRNET_MODEL:
   ALIGN_CORNERS: true
-  PRETRAINED: "/mnt/ssd1/Pytorch_models/hrnetv2_w48_imagenet_pretrained.pth"
+  PRETRAINED: "/home/akhil/Documents/hrnetv2_w48_imagenet_pretrained.pth"
   CONFIGURATION:
     STEM_STRIDE: 4
     STEM_INPUT_CHANNEL: 3

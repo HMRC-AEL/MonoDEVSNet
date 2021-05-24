@@ -1,9 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Jul 30 08:50:55 2020
-
-@author: a84167753
-"""
+# From the Authors of https://ieeexplore.ieee.org/document/9052469, https://github.com/HRNet/HRNet-Image-Classification
 
 import os
 
@@ -38,6 +33,7 @@ def conv3x3(inChannel, outChannel, stride=1):
                      padding=1, bias=False)
 
 
+# From the Authors of https://ieeexplore.ieee.org/document/9052469, https://github.com/HRNet/HRNet-Image-Classification
 class HighResolutionModule(nn.Module):
 
     def __init__(self, num_branches, block, num_blocks, num_inchannels,
@@ -310,6 +306,7 @@ blocks_dict = {
 }
 
 
+# From Author of https://ieeexplore.ieee.org/document/9052469, https://github.com/HRNet/HRNet-Image-Classification
 class HRNet(nn.Module):
 
     def __init__(self, config, **kwargs):
