@@ -121,7 +121,7 @@ class MonoDEVSOptions(MonodepthOptions):
         self.parser.add_argument("--depth_init",
                                  help="provide starting depth values",
                                  type=float,
-                                 default=3)
+                                 default=1)
         self.parser.add_argument("--n_class",
                                  help="Number of semantic segmentation classes",
                                  type=int,
@@ -179,6 +179,8 @@ class MonoDEVSOptions(MonodepthOptions):
             default_class[k] = v
 
         self.options.models_fcn_name = default_class.copy()
+
+        self.options.models_to_load = ["encoder", "depth_decoder", "pose_encoder", "pose"]
         return self.options
 
 

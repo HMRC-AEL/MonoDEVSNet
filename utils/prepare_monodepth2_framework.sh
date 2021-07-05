@@ -30,23 +30,32 @@
 # clone monodepth2 repository
 cd ..
 git clone https://github.com/nianticlabs/monodepth2
-touch monodepth2/__init__.py
 
 # Rearrange imports
+# In kitti dataset folder
 sed -i 's/from kitti_utils/from ..kitti_utils/g' monodepth2/datasets/kitti_dataset.py
+sed -i 's/transforms.ColorJitter.get_params(/transforms.ColorJitter(/g' monodepth2/datasets/mono_dataset.py
 
+# In evaluate depth file
 sed -i 's/from layers/from monodepth2.layers/g' monodepth2/evaluate_depth.py
 sed -i 's/from options/from monodepth2.options/g' monodepth2/evaluate_depth.py
 sed -i 's/import datasets/from monodepth2 import datasets/g' monodepth2/evaluate_depth.py
 
+# In monodepth2 trainer.py file
 sed -i 's/from kitti_utils/from monodepth2.kitti_utils/g' monodepth2/trainer.py
 sed -i 's/from layers/from monodepth2.layers/g' monodepth2/trainer.py
 sed -i 's/import datasets/from monodepth2 import datasets/g' monodepth2/trainer.py
+sed -i 's/"border", align_corners=False)/"border", align_corners=True)/g' monodepth2/trainer.py
 
+# In monodepth2 network folder
 sed -i 's/from layers/from monodepth2.layers/g' monodepth2/networks/depth_decoder.py
+rm monodepth2/networks/__init__.py
+
+# In monodepth2 kitti_utils.py file
+sed -i 's/.astype(np.int)/.astype(np.int32)/g' monodepth2/kitti_utils.py
 
 # change __init__ file in monodepth2/network to exclude depth network
-rm monodepth2/networks/__init__.py
+touch monodepth2/__init__.py
 echo from .layers import SSIM, BackprojectDepth, Project3D >> monodepth2/__init__.py
 echo from .options import MonodepthOptions >> monodepth2/__init__.py
 echo from .datasets.mono_dataset import MonoDataset >> monodepth2/__init__.py

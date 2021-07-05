@@ -229,7 +229,7 @@ class MonoDEVSNetTrainer(Trainer):
         self.step, self.epoch, self.previous_sp_loss = 0, 0, 0
         self.early_phase, self.mid_phase, self.late_phase = False, False, False
         self.start_time = time.time()
-
+        print(self.opt)
         self.save_opts()
 
     def train(self):
@@ -499,7 +499,7 @@ class MonoDEVSNetTrainer(Trainer):
 
             # Loss equalizer
             losses["loss/self"] = losses["loss"].cpu().data
-            weight_self_loss = self.previous_sp_loss / losses["loss/self"] if self.opt.use_le else 1
+            weight_self_loss = self.previous_sp_loss / losses["loss/self"] if self.opt.use_le else self.opt.self_scaling_factor
             losses["loss"] *= weight_self_loss
 
         # Supervised loss function - Mostly for virtual kitti images as it has ground truth

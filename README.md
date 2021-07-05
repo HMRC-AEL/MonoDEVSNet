@@ -36,8 +36,7 @@ This is an official [**PyTorch**](https://pytorch.org/) implementation of [**Mon
   conda deactivate
 ```
 
-We run our experiments using PyTorch >= 1.5.0, Torchvision==0.8.0, CUDA=10.2, Python=3.8.x with batch_size=12
-
+We run our experiments using PyTorch >= 1.5.0, Torchvision>=0.8.2, CUDA>=10.2, Python>=3.7.x with batch_size=12 
 
 **Prepare monodepth2 framework**
 
@@ -78,8 +77,8 @@ Set pretrained model path in the config file ([path](configs/hrnet_w48_vk2.yaml)
 
 ```bash
     cd <MonoDEVSNet_base_path>
-    python3 monodevsnet_trainer.py --png --cuda_idx 0 --num_workers 4 --batch_size 10 --height 192 --width 640 \  
-    --use_dc --use_le --use_ms --version <an_extension_to_model_name> --num_epochs 200 --max_depth 80. \
+    CUDA_VISIBLE_DEVICES=0 python3 monodevsnet_trainer.py --png --cuda_idx 0 --num_workers 4 --batch_size 10 --height 192 --width 640 \  
+    --use_dc --use_le --use_ms --version <an_extension_to_model_name> --num_epochs 100 --max_depth 80. \
     --real_dataset kitti --syn_dataset <vk_1.0/vk_2.0> --config hrnet_w<18/32/48>_vk<1/2> \
     --real_data_path <path_to_real_dataset_folder> --syn_data_path <path_to_synthetic_dataset_folder>
 ```
@@ -137,6 +136,15 @@ To visualize the MonoDEVSNet results, run
 self-supervised monocular depth estimation
 
 [**HRNet-Image-Classification**](https://github.com/HRNet/HRNet-Image-Classification): High-resolution networks (HRNets) for Image classification
+
+
+## **************** Update ****************
+
+Lately verified our training and inference scripts with newer python packages: 
+torch==1.9.0, torchvision==0.10.0, CUDA=11.3, python==3.8.10, numpy==1.21.0 with batch_size=12
+
+Working on **MonoDEVSNet** framework to train with DenseNet models as backbone network. 
+
 
 ## License
 The source code is released under the [MIT license](LICENSE.md).

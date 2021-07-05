@@ -75,7 +75,7 @@ class HRNetPyramidEncoder(nn.Module):
         # pyramid of feature maps
         feats_pyramid_0 = self.pyramid_0(raw_hrnet_feats)
         feats_pyramid_0 = F.interpolate(
-            feats_pyramid_0, size=[np.int(h / 2), np.int(w / 2)], mode='bilinear', align_corners=True)
+            feats_pyramid_0, size=[np.int32(h / 2), np.int32(w / 2)], mode='bilinear', align_corners=True)
 
         feats_pyramid_1 = self.pyramid_1(raw_hrnet_feats)
         feats_pyramid_2 = self.pyramid_2(raw_hrnet_feats)
