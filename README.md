@@ -128,6 +128,11 @@ To visualize the MonoDEVSNet results, run
 | MonoDEVSNet | HRNet W48 | vK 1.0 | [**Download**](https://drive.google.com/file/d/1MpCXKVih-LKFVtQ0Nm4CR53sJpk0T5Ah/view?usp=sharing)
 | MonoDEVSNet | HRNet W48 | vK 2.0 | [**Download**](https://drive.google.com/file/d/1DLLyaHVdsmifyFGatzpU4vIvu-CcfR2I/view?usp=sharing)
 
+## Generalization: Qualitative results on CITYSCAPES.
+
+![Alt Text](media/figures/generalization_cityscapes_qualitative_results.png)
+
+
 ## Related projects
 
 [**monodepth2**](https://github.com/nianticlabs/monodepth2): Digging into Self-Supervised Monocular Depth Prediction
