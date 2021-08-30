@@ -21,7 +21,7 @@
 
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL THE
 # AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
@@ -29,6 +29,7 @@
 
 import argparse
 import os
+import sys
 import time
 from datetime import date
 from os.path import expanduser
@@ -38,11 +39,14 @@ import numpy as np
 import torch
 import yaml
 from PIL import Image
+from matplotlib import pyplot as plt
+from torch.nn import functional as F
 from torchvision import transforms
 from tqdm import tqdm
 
 import networks
 from utils import readlines
+from utils import MonoDEVSOptions, convert_list2dict
 
 home = expanduser("~")
 week_num = date.today().isocalendar()[1]
@@ -59,76 +63,32 @@ def str2bool(v):
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
-class MonoDEVSTestOptions(object):
-    def __init__(self, base_path=os.path.join(os.path.dirname(os.path.abspath(__file__)))):
-        self.parser = argparse.ArgumentParser(description="MonoDEVSNet test options")
+class MonoDEVSTestOptions(MonoDEVSOptions):
+    def __init__(self, *args, **kwargs):
+        super(MonoDEVSTestOptions, self).__init__(*args, **kwargs)
 
         # PATHS
-        self.parser.add_argument("--base_path",
-                                 type=str,
-                                 help="path to the MonoDEVSNet framework",
-                                 default=base_path)
-        self.parser.add_argument("--log_dir",
-                                 type=str,
-                                 help="log directory",
-                                 default=os.path.join(base_path, 'log_dir'))
         self.parser.add_argument("--image_folder_path",
                                  type=str,
                                  help="path to real dataset, for dataset=\"any\" option provide the images folder",
                                  default="")
-        self.parser.add_argument("--dataset",
-                                 type=str,
-                                 help="choose a dataset name among kitti, any images",
-                                 default="kitti")
-        self.parser.add_argument('--config',
-                                 help='configuration of the hrnet encoder',
-                                 type=str,
-                                 default='hrnet_w48_vk2')
-        self.parser.add_argument("--height",
-                                 type=int,
-                                 help="input image height",
-                                 default=192)
-        self.parser.add_argument("--width",
-                                 type=int,
-                                 help="input image width",
-                                 default=640)
-        self.parser.add_argument("--min_depth",
-                                 type=float,
-                                 help="minimum depth range",
-                                 default=0.1)
-        self.parser.add_argument("--max_depth",
-                                 type=float,
-                                 help="maximum depth range",
-                                 default=80.)
-        self.parser.add_argument("--load_weights_folder",
-                                 type=str,
-                                 help="name of model to load",
-                                 default=None)
-        self.parser.add_argument("--version",
-                                 type=str,
-                                 help="name an extension/version to save the MonoDEVSNet results/data",
-                                 default='')
-
-        # SYSTEM options
-        self.parser.add_argument("--cuda_idx",
-                                 help="if set disables CUDA",
-                                 type=int,
-                                 default=0)
-        self.parser.add_argument("--num_workers",
-                                 type=int,
-                                 help="number of dataloader workers",
-                                 default=1)
-
         self.options = []
 
     def parse(self):
         self.options = self.parser.parse_args()
         if self.options.load_weights_folder is None:
-            self.options.load_weights_folder = os.path.join(self.options.base_path, 'models', self.options.config)
-        else:
-            self.options.load_weights_folder = os.path.join(self.options.load_weights_folder,
-                                                            self.options.config)
-        self.options.config_path = os.path.join(self.options.base_path, 'configs', self.options.config + '.yaml')
+            self.options.load_weights_folder = os.path.join('models', 'hrnet_w48_vk2')  # The Best model path
+
+        changed_names = convert_list2dict(self.options.models_fcn_name)
+        default_class = {"encoder": "HRNet", "depth_decoder": "DepthDecoder",
+                         "pose_encoder": "ResnetEncoder", "pose_decoder": "PoseDecoder",
+                         "domain_classifier": "DomainClassifier", "dis_depth": "DepthDiscriminator",
+                         "gan_s_decoder": "ImageDecoder", "gan_t_decoder": "ImageDecoder",
+                         "dis_s": "ImageDiscriminator", "dis_t": "ImageDiscriminator"}
+        for k, v in changed_names.items():
+            default_class[k] = v
+
+        self.options.models_fcn_name = default_class.copy()
         return self.options
 
 
@@ -153,9 +113,11 @@ def compute_errors(gt, pred):
 
 
 class Evaluation(object):
-    def __init__(self, opt):
+    def __init__(self, opt, model_name=None):
+
         # Load experiments options/parameters
         self.opt = opt
+        self.model_name = model_name
         self.opt.trainer_name = 'trainer.py'
 
         torch.autograd.set_detect_anomaly(False)
@@ -171,19 +133,17 @@ class Evaluation(object):
 
         # Set cuda index
         os.environ['CUDA_VISIBLE_DEVICES'] = str(self.opt.cuda_idx)
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cuda:" + str(self.opt.cuda_idx) if torch.cuda.is_available() else "cpu")
 
         # Load network architecture
         ''' Setting Models, initialization and optimization '''
-        with open(self.opt.config_path, 'r') as cfg:
-            self.config = yaml.safe_load(cfg)
-
         # Encoder for (depth, segmentation, pose)
-        self.models["depth_encoder"] = self.network_selection('depth_encoder')
+        self.models["encoder"] = self.network_selection('encoder')
 
         # Depth decoder
         self.models["depth_decoder"] = self.network_selection('depth_decoder')
 
+        # Loading pretrained model
         if self.opt.load_weights_folder is not None:
             try:
                 self.load_pretrained_models()
@@ -191,10 +151,14 @@ class Evaluation(object):
             except Exception as e:
                 print(e)
                 print('models not found, start downloading!')
+                sys.exit(0)
 
         if not os.path.exists(self.opt.log_dir):
             os.makedirs(self.opt.log_dir)
 
+        if self.model_name is None:
+            self.model_name = self.opt.models_fcn_name['encoder'] + '_' + str(self.opt.num_layers)
+        print('Exp name: {}'.format(model_name))
         print("\nFiles are saved to:\n  ", self.opt.log_dir)
         print("Running scripts on :  ", self.device)
 
@@ -211,30 +175,87 @@ class Evaluation(object):
                 self.im_path_list.append(image_path)
         elif self.opt.dataset == 'any':
             for base_path, base_folder, file_paths in os.walk(self.opt.image_folder_path):
-                for file_path in file_paths:
+                for file_path in sorted(file_paths):
                     if file_path.endswith('.png') or file_path.endswith('.jpg'):
                         self.im_path_list.append(os.path.join(base_path, file_path))
         else:
             raise RuntimeError('Choose dataset to test MonoDEVSNet model')
+        print('Total number of images in {} dataset: {}'.format(self.opt.dataset, len(self.im_path_list)))
 
         self.rgbs, self.pred_depths, self.gt_depths = [], [], []
         self.resize = transforms.Resize((self.opt.height, self.opt.width), interpolation=Image.ANTIALIAS)
         if self.opt.dataset == 'kitti':
             # Eigen split - LIDAR data
-            gt_path = os.path.join(self.opt.base_path, "splits", "eigen", "gt_depths.npz")
+            gt_path = os.path.join(os.path.dirname(__file__), "splits", "eigen", "gt_depths.npz")
             self.gt_depths = np.load(gt_path, fix_imports=True, encoding='latin1', allow_pickle=True)["data"]
 
     def invdepth_to_depth(self, inv_depth):
         return 1 / self.opt.max_depth + (1 / self.opt.min_depth - 1 / self.opt.max_depth) * inv_depth
 
-    def eval(self):
-        errors_absolute_80, time_taken, time_for_each_frame = [], time.time(), []
+    def eval_any(self):
+        errors_absolute, time_taken, time_for_each_frame, flops_for_each_frame, total_time = \
+            [], time.time(), [], [], time.time()
         with torch.no_grad():
             for iter_l, im_path in tqdm(enumerate(self.im_path_list)):
-                input_color = self.load_rgb_image(im_path)
+                try:
+                    input_color, input_color_np = self.load_rgb_image(im_path)
+                except Exception as e:
+                    print(e)
+                    print('failed image path: {}'.format(im_path))
+                height_o, width_o, channels_o = input_color_np.shape
 
                 time_taken = time.time()
-                features, _ = self.models["depth_encoder"](input_color)
+                # Modify this accordingly - network arch
+                features, _ = self.models["encoder"](input_color)
+                output = self.models["depth_decoder"](features)
+                time_taken -= time.time()
+                if iter_l > 10:
+                    time_for_each_frame.append(np.abs(time_taken))
+
+                # Convert disparity into depth maps
+                pred_disp = self.invdepth_to_depth(output[("disp", 0)])
+                pred_disp = pred_disp[0, 0].cpu().numpy()
+                pred_depth_raw = 3. / pred_disp.copy()
+
+                # save resized rgb,and raw pred depth
+                self.rgbs.append(input_color_np)
+                self.pred_depths.append(pred_depth_raw)
+                pred_depth_t = torch.tensor(pred_depth_raw).unsqueeze(0).unsqueeze(0)
+                pred_depth_t[pred_depth_t < self.opt.min_depth] = self.opt.min_depth
+                pred_depth_t[pred_depth_t > self.opt.max_depth] = self.opt.max_depth
+
+                # Save information
+                folder_name = os.path.dirname(im_path).split('/')[-1]
+                depth_save_path = im_path.replace('/' + folder_name + '/',
+                                                  '/' + folder_name + '_' + 'depth_MonoDEVSNet' + '/'). \
+                    replace('.jpg', '.png')
+                pred_depth_o = Image.fromarray(np.array(F.interpolate(pred_depth_t,
+                                                                      (height_o, width_o)).squeeze() * 256,
+                                                        dtype=np.uint16))
+
+                if not os.path.exists(os.path.dirname(depth_save_path)):
+                    os.makedirs(os.path.dirname(depth_save_path))
+                pred_depth_o.save(depth_save_path)
+
+        print('time taken for network model {}-{}: {}'.format(self.opt.models_fcn_name['encoder'], self.opt.num_layers,
+                                                              1 / np.mean(time_for_each_frame)))
+        return None, None
+
+    def eval(self):
+        if self.opt.dataset == 'any':
+            return self.eval_any()
+        else:
+            return self.eval_local()
+
+    def eval_local(self):
+        errors_absolute, errors_relative, ratios, time_taken, time_for_each_frame, total_time = \
+            [], [], [], time.time(), [], time.time()
+        with torch.no_grad():
+            for iter_l, im_path in tqdm(enumerate(self.im_path_list)):
+                input_color, input_im_np = self.load_rgb_image(im_path)
+
+                time_taken = time.time()
+                features, _ = self.models["encoder"](input_color)
                 output = self.models["depth_decoder"](features)
                 time_taken -= time.time()
                 time_for_each_frame.append(np.abs(time_taken))
@@ -263,63 +284,75 @@ class Evaluation(object):
                     pred_depth[pred_depth < self.opt.min_depth] = self.opt.min_depth
                     pred_depth[pred_depth > self.opt.max_depth] = self.opt.max_depth
 
-                    errors_absolute_80.append(compute_errors(gt_depth[mask], pred_depth[mask]))
+                    errors_absolute.append(compute_errors(gt_depth[mask], pred_depth[mask]))
 
                 # save resized rgb,and raw pred depth
                 self.rgbs.append(input_color.squeeze().cpu().permute(1, 2, 0).numpy().copy())
                 self.pred_depths.append(pred_depth_raw)
 
             if self.opt.dataset == 'kitti':
-                errors_absolute_80 = np.array(errors_absolute_80).mean(0)
+                errors_absolute = np.array(errors_absolute).mean(0)
 
                 print('\n  \n  for 80 meters - MonoDEVSNet Absolute depth estimation results '
                       'fps: {}'.format(1 / np.mean(time_for_each_frame)))
                 print("  " + ("{:>8} | " * 7).format("abs_rel", "sq_rel", "rmse", "rmse_log", "a1", "a2", "a3"))
-                print(("&{: 8.4f}  " * 7).format(*errors_absolute_80.tolist()) + "\\\\")
+                print(("&{: 8.4f}  " * 7).format(*errors_absolute.tolist()) + "\\\\")
                 torch.save({'rgbs': self.rgbs, 'pred_depths': self.pred_depths},
-                           os.path.join(self.opt.log_dir, 'monoDEVSNet_kitti_eigen_test_split_' + self.opt.config +
+                           os.path.join(self.opt.log_dir, 'monoDEVSNet_kitti_eigen_test_split_' + self.model_name +
                                         '_' + self.opt.version + '.pth'))
             else:
                 torch.save({'rgbs': self.rgbs, 'pred_depths': self.pred_depths},
                            os.path.join(self.opt.log_dir, 'any_data.pth'))
 
-            stop_here = 1
+            return errors_absolute, errors_relative
 
     def load_rgb_image(self, file_path):
         if self.opt.dataset == 'kitti' or self.opt.dataset == 'any':
-            im = self.resize(Image.open(file_path).convert('RGB'))
-            return torch.tensor(np.array(im, dtype=np.float32) / 255).permute(2, 0, 1).unsqueeze(0).to(self.device)
+            im_pil = Image.open(file_path).convert('RGB')
+            return torch.tensor(np.array(self.resize(im_pil), dtype=np.float32) / 255).permute(2, 0, 1).unsqueeze(0).to(
+                self.device), np.array(im_pil)
 
     def load_pretrained_models(self):
         # Paths to the models
-        encoder_path = os.path.join(self.opt.load_weights_folder, "depth_encoder.pth")
+        encoder_path = os.path.join(self.opt.load_weights_folder, "encoder.pth")
         decoder_path = os.path.join(self.opt.load_weights_folder, "depth_decoder.pth")
 
         # Load model weights
         encoder_dict = torch.load(encoder_path, map_location=torch.device('cpu'))
-        self.models["depth_encoder"].load_state_dict({k: v for k, v in encoder_dict.items()
-                                                      if k in self.models["depth_encoder"].state_dict()})
+        self.models["encoder"].load_state_dict({k: v for k, v in encoder_dict.items()
+                                                if k in self.models["encoder"].state_dict()})
         self.models["depth_decoder"].load_state_dict(torch.load(decoder_path, map_location=torch.device('cpu')))
 
         # Move network weights from cpu to gpu device
-        self.models["depth_encoder"].to(self.device).eval()
+        self.models["encoder"].to(self.device).eval()
         self.models["depth_decoder"].to(self.device).eval()
 
     # model_key is CaSe SenSiTivE
     def network_selection(self, model_key):
-        if model_key == 'depth_encoder':
-            return networks.HRNetPyramidEncoder(self.config).to(self.device)
+        if model_key == 'encoder':
+            # Multiple network architectures
+            if 'HRNet' in self.opt.models_fcn_name[model_key]:
+                with open(os.path.join('configs', 'hrnet_w' + str(self.opt.num_layers) + '_vk2.yaml'), 'r') as cfg:
+                    config = yaml.safe_load(cfg)
+                return networks.HRNetPyramidEncoder(config).to(self.device)
+            elif 'DenseNet' in self.opt.models_fcn_name[model_key]:
+                return networks.DensenetPyramidEncoder(densnet_version=self.opt.num_layers).to(self.device)
+            elif 'ResNet' in self.opt.models_fcn_name[model_key]:
+                return networks.ResnetEncoder(self.opt.num_layers,
+                                              self.opt.weights_init == "pretrained").to(self.device)
+            else:
+                raise RuntimeError('Choose a depth encoder within available scope')
 
         elif model_key == 'depth_decoder':
-            return networks.DepthDecoder(self.models["depth_encoder"].num_ch_enc).to(self.device)
+            return networks.DepthDecoder(self.models["encoder"].num_ch_enc).to(self.device)
 
         else:
             raise RuntimeError("Don\'t forget to mention what you want!")
 
 
 if __name__ == "__main__":
-
-    opts = MonoDEVSTestOptions()
+    # Evaluation on selected models
+    opts = MonoDEVSTestOptions(base_path=os.path.join(os.path.dirname(os.path.abspath(__file__))))
     opts = opts.parse()
     eval_main = Evaluation(opt=opts)
     eval_main.eval()

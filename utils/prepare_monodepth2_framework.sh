@@ -46,13 +46,20 @@ sed -i 's/from kitti_utils/from monodepth2.kitti_utils/g' monodepth2/trainer.py
 sed -i 's/from layers/from monodepth2.layers/g' monodepth2/trainer.py
 sed -i 's/import datasets/from monodepth2 import datasets/g' monodepth2/trainer.py
 sed -i 's/"border", align_corners=False)/"border", align_corners=True)/g' monodepth2/trainer.py
+sed -i 's/self.opt.num_layers/50/g' monodepth2/trainer.py
 
 # In monodepth2 network folder
 sed -i 's/from layers/from monodepth2.layers/g' monodepth2/networks/depth_decoder.py
+sed -i 's/return self.features/return self.features, self.features\[-1\]/g'  monodepth2/networks/resnet_encoder.py
 rm monodepth2/networks/__init__.py
 
 # In monodepth2 kitti_utils.py file
 sed -i 's/.astype(np.int)/.astype(np.int32)/g' monodepth2/kitti_utils.py
+
+# In monodepth2 options.py file
+sed -i 's/choices=\[18, 34, 50, 101, 152\]/choices=\[18, 32, 34, 48, 50, 101, 152, 121, 161, 169, 201\]/g' monodepth2/options.py
+sed -i 's/choices=\["kitti",/choices=\["any", "kitti",/g' monodepth2/options.py
+sed -i 's/default=100.0/default=80.0/g' monodepth2/options.py
 
 # change __init__ file in monodepth2/network to exclude depth network
 touch monodepth2/__init__.py

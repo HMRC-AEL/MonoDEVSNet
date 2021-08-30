@@ -169,7 +169,6 @@ class MonoDEVSOptions(MonodepthOptions):
 
     def parse(self):
         self.options = self.parser.parse_args()
-        self.options.config = os.path.join(self.options.base_path, 'configs', self.options.config + '.yaml')
 
         changed_names = convert_list2dict(self.options.models_fcn_name)
         default_class = {"encoder": "HRNet", "depth_decoder": "DepthDecoder",

@@ -32,7 +32,7 @@ import torchvision.models as models
 from torch import nn
 from torch.nn import functional as F
 
-from networks import HRNet
+from networks import HRNet, densenet121, densenet169, densenet161, densenet201
 
 
 def _conv_unit(in_channels, out_channels, kernel_size, stride, padding=1):
@@ -84,3 +84,59 @@ class HRNetPyramidEncoder(nn.Module):
 
         return [feats_pyramid_0, feats_pyramid_1, feats_pyramid_2, feats_pyramid_3,
                 feats_pyramid_4], raw_hrnet_feats
+
+
+class DensenetPyramidEncoder(nn.Module):
+
+    def __init__(self, densnet_version=121, pretrained_weights=True):
+        super(DensenetPyramidEncoder, self).__init__()
+        if 121 == densnet_version:
+            self.densenet = densenet121(pretrained=pretrained_weights)
+            layers = [6, 12, 24, 16]
+            num_init_channels = 64
+            channel_per_layer = 32
+        elif 169 == densnet_version:
+            self.densenet = densenet169(pretrained=pretrained_weights)
+            layers = [6, 12, 32, 32]
+            num_init_channels = 64
+            channel_per_layer = 32
+        elif 161 == densnet_version:
+            self.densenet = densenet161(pretrained=pretrained_weights)
+            layers = [6, 12, 36, 24]
+            num_init_channels = 96
+            channel_per_layer = 48
+        elif 201 == densnet_version:
+            self.densenet = densenet201(pretrained=pretrained_weights)
+            layers = [6, 12, 48, 32]
+            num_init_channels = 64
+            channel_per_layer = 32
+
+        pyramid_in_channels = [num_init_channels]
+        for i in range(0, len(layers)):
+            if i == 0:
+                pyramid_in_channels.append(layers[i] * channel_per_layer + pyramid_in_channels[i])
+            else:
+                pyramid_in_channels.append(int(layers[i] * channel_per_layer + pyramid_in_channels[i] / 2))
+
+        self.num_ch_enc = np.array(pyramid_in_channels)
+
+    def forward(self, input_image):
+        batch, ch, h, w = input_image.size()
+        x = (input_image - 0.45) / 0.225
+
+        # generate default feature maps by processing x through Hrnet
+        densenet_feats = self.densenet(x)
+
+        # pyramid of feature maps
+        feats_pyramid_0 = densenet_feats[0]
+        feats_pyramid_0 = F.interpolate(
+            feats_pyramid_0, size=[np.int(h / 2), np.int(w / 2)], mode='bilinear', align_corners=True)
+
+        feats_pyramid_1 = densenet_feats[1]
+        feats_pyramid_2 = densenet_feats[2]
+        feats_pyramid_3 = densenet_feats[3]
+        feats_pyramid_4 = densenet_feats[4]
+        raw_densenet_feats = densenet_feats[4]
+
+        return [feats_pyramid_0, feats_pyramid_1, feats_pyramid_2, feats_pyramid_3,
+                feats_pyramid_4], raw_densenet_feats

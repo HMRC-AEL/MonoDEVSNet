@@ -30,7 +30,7 @@
 """
 example command line arguments:
  python3 monodevnset_trainer.py --cuda_idx 0 --num_workers 0 --batch_size 10 --height 192 --width 640 --max_depth 80 \
- --use_dc --use_le --use_ms --version markX --num_epochs 200 \
+ --use_dc --use_le --use_ms --version markX --num_epochs 200 --png \
  --real_dataset kitti --syn_dataset vk_2.0 --real_data_path /mnt/largedisk/Datasets/KITTI \
  --syn_data_path /mnt/largedisk/Datasets
 """
@@ -51,6 +51,7 @@ from tensorboardX import SummaryWriter
 from torch import optim, nn
 from torch.utils.data import DataLoader
 from torch.nn import functional as F
+from tqdm import tqdm
 
 import networks
 import monodepth2
@@ -74,7 +75,7 @@ class MonoDEVSNetTrainer(Trainer):
 
         # Set cuda index
         os.environ['CUDA_VISIBLE_DEVICES'] = str(self.opt.cuda_idx)
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cuda:" + str(self.opt.cuda_idx) if torch.cuda.is_available() else "cpu")
 
         # Remove unnecessary variables from self object
         for attr in ('models', 'model_optimizer', 'parameters_to_train', 'model_lr_scheduler',
@@ -87,8 +88,6 @@ class MonoDEVSNetTrainer(Trainer):
         self.torch_zero = torch.tensor(0.).float().to(self.device)
         self.True_ = torch.tensor(np.ones(self.opt.batch_size)).float().to(self.device)
         self.False_ = torch.tensor(np.zeros(self.opt.batch_size)).float().to(self.device)
-        with open(self.opt.config, 'r') as cfg:
-            self.config = yaml.safe_load(cfg)
 
         # Encoder for (depth, segmentation, pose)
         self.models["encoder"] = self.network_selection('encoder')
@@ -376,6 +375,7 @@ class MonoDEVSNetTrainer(Trainer):
                 if ('d_' not in k) and v.requires_grad and ('/' not in k):
                     final_loss += v
             final_loss.backward()
+            losses["loss"] = final_loss
 
             if (batch_idx + 1) % 2 == 0:
                 self.model_optimizer.step()
@@ -681,7 +681,8 @@ class MonoDEVSNetTrainer(Trainer):
 
         pred_disps = []
 
-        for batch_idx, inputs in enumerate(self.real_eigen_val_loader, 0):
+        print('Start running monoDEVSNet model on KITTI-Eigen validation set : ', end=' ')
+        for batch_idx, inputs in tqdm(enumerate(self.real_eigen_val_loader, 0)):
 
             # Move all available tensors to GPU memory
             for key, ipt in inputs.items():
@@ -745,7 +746,8 @@ class MonoDEVSNetTrainer(Trainer):
             errors_rsf.append(compute_errors(gt_depth, pred_depth_rsf))
             errors_asf.append(compute_errors(gt_depth, pred_depth_asf))
 
-        print("\n \n KITTI Eigen Validation Split")
+        print("\n \n KITTI Eigen Validation Split: {}".format(self.gt_depths.__len__()))
+        med_std = [np.inf, np.inf]
         ratios = np.array(ratios)
         med = np.median(ratios)
         print(" Scaling ratios | med: {:0.3f} | std: {:0.3f}".format(med, np.std(ratios / med)))
@@ -791,7 +793,11 @@ class MonoDEVSNetTrainer(Trainer):
     def network_selection(self, model_key):
         if model_key == 'encoder':
             if 'HRNet' == self.opt.models_fcn_name[model_key]:
-                return networks.HRNetPyramidEncoder(self.config).to(self.device)
+                with open(os.path.join('configs', 'hrnet_w' + str(self.opt.num_layers) + '_vk2.yaml'), 'r') as cfg:
+                    config = yaml.safe_load(cfg)
+                return networks.HRNetPyramidEncoder(config).to(self.device)
+            elif 'DenseNet' == self.opt.models_fcn_name[model_key]:
+                return networks.DensenetPyramidEncoder(densnet_version=self.opt.num_layers).to(self.device)
             elif 'ResNet' == self.opt.models_fcn_name[model_key]:
                 return networks.ResnetEncoder(self.opt.num_layers,
                                               self.opt.weights_init == "pretrained").to(self.device)
@@ -806,14 +812,14 @@ class MonoDEVSNetTrainer(Trainer):
 
         # Add multiple domain classifiers
         elif model_key == 'domain_classifier':
-            return networks.DomainClassifier(in_channel=720, width=self.opt.width,
-                                             height=self.opt.height).to(self.device)
+            inchannels_l, width_l, height_l = self.domain_classifier_input_details()
+            return networks.DomainClassifier(in_channel=inchannels_l, width=int(width_l), height=int(height_l)). \
+                to(self.device)
 
         elif model_key == 'pose_encoder':
-            return networks.ResnetEncoder(
-                self.opt.num_layers,
-                self.opt.weights_init == "pretrained",
-                num_input_images=2).to(self.device)
+            return networks.ResnetEncoder(self.opt.num_layers if self.opt.num_layers == 18 else 50,
+                                          self.opt.weights_init == "pretrained",
+                                          num_input_images=2).to(self.device)
 
         # Add other models
         elif model_key == 'pose':
@@ -835,6 +841,15 @@ class MonoDEVSNetTrainer(Trainer):
 
         else:
             raise RuntimeError('Don\'t forget to mention what you want!')
+
+    def domain_classifier_input_details(self):
+        w, h = self.opt.width, self.opt.height
+        dc_in_dict = {'DenseNet': {121: [1024, w / 8, h / 8], 169: [1664, w / 8, h / 8], 201: [1920, w / 8, h / 8],
+                                   161: [2208, w / 8, h / 8]},
+                      'ResNet': {18: [512, w / 8, h / 8], 34: [512, w / 8, h / 8], 50: [2048, w / 8, h / 8],
+                                 101: [2048, w / 8, h / 8], 152: [2048, w / 8, h / 8]},
+                      'HRNet': {18: [270, w, h], 32: [480, w, h], 48: [720, w, h]}}
+        return dc_in_dict[self.opt.models_fcn_name['encoder']][self.opt.num_layers]
 
 
 if __name__ == "__main__":
