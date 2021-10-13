@@ -1,11 +1,20 @@
-## [**Monocular Depth Estimation through Virtual-world Supervision and Real-world SfM Self-Supervision**](https://arxiv.org/abs/2103.12209)
-**Abstract:** Depth information is essential for on-board perception in autonomous driving and driver assistance. Monocular depth estimation (MDE) is very appealing since it allows for appearance and depth being on direct pixelwise correspondence without further calibration. Best MDE models are based on Convolutional Neural Networks (CNNs) trained in a supervised manner, i.e., assuming pixelwise ground truth (GT). Usually, this GT is acquired at training time through a calibrated multi-modal suite of sensors. However, also using only a monocular system at training time is cheaper and more scalable. This is possible by relying on structure-from-motion (SfM) principles to generate self-supervision. Nevertheless, problems of camouflaged objects, visibility changes, static-camera intervals, textureless areas, and scale ambiguity, diminish the usefulness of such self-supervision. In this paper, we perform monocular depth estimation by virtual-world supervision (MonoDEVS) and real-world SfM self-supervision. We compensate the SfM self-supervision limitations by leveraging virtual-world images with accurate semantic and depth supervision and addressing the virtual-to-real domain gap. Our [**MonoDEVSNet**](https://arxiv.org/abs/2103.12209) outperforms previous MDE CNNs trained on monocular and even stereo sequences.
+## [**Monocular Depth Estimation through Virtual-world Supervision and Real-world SfM Self-Supervision**](https://ieeexplore.ieee.org/document/9565825)
+
+**Abstract:** Depth information is essential for on-board perception in autonomous driving and driver assistance. Monocular depth estimation (MDE) is very appealing since it allows for appearance and depth being on direct pixelwise correspondence without further calibration. Best MDE models are based on Convolutional Neural Networks (CNNs) trained in a supervised manner, i.e., assuming pixelwise ground truth (GT). Usually, this GT is acquired at training time through a calibrated multi-modal suite of sensors. However, also using only a monocular system at training time is cheaper and more scalable. This is possible by relying on structure-from-motion (SfM) principles to generate self-supervision. Nevertheless, problems of camouflaged objects, visibility changes, static-camera intervals, textureless areas, and scale ambiguity, diminish the usefulness of such self-supervision. In this paper, we perform monocular depth estimation by virtual-world supervision (MonoDEVS) and real-world SfM self-supervision. We compensate the SfM self-supervision limitations by leveraging virtual-world images with accurate semantic and depth supervision and addressing the virtual-to-real domain gap. Our [**MonoDEVSNet**](https://arxiv.org/pdf/2103.12209v2.pdf) outperforms previous MDE CNNs trained on monocular and even stereo sequences.
 
 
-![Alt Text](media/figures/monodevsnet_kitti_seq.gif)
+![Alt Text](media/figures/monodevsnet_kitti_seq.gif)()
 
 
-This is an official [**PyTorch**](https://pytorch.org/) implementation of [**Monocular Depth Estimation through Virtual-world Supervision and Real-world SfM Self-Supervision (*Arxiv*)**](https://arxiv.org/abs/2103.12209) 
+This is an official [**PyTorch**](https://pytorch.org/) implementation of Monocular Depth Estimation through Virtual-world Supervision and Real-world SfM Self-Supervision. 
+
+IEEE Transactions on Intelligent Transportation Systems - 2021 [**(link)**](https://ieeexplore.ieee.org/document/9565825)
+
+Arxiv - [**link**](https://arxiv.org/abs/2103.12209v2) - [**pdf**](https://arxiv.org/pdf/2103.12209v2.pdf)
+
+[**Video Presentation**](https://www.youtube.com/watch?v=fD-VZkvaQdo) On Monocular Depth Estimation: (1) **MonoDEVS** ; (2) Multi-modal Co-training by **Antonio M. López** at **3rd 3D-DLAD @IV'2021**
+
+
 *Akhil Gurram, Ahmet Faruk Tuna, Fengyi Shen, Onay Urfalioglu, Antonio M. López*.
 
 
@@ -149,17 +158,20 @@ The source code is released under the [MIT license](LICENSE.md).
 ## Cite
 If you want to cite the framework feel free to use this preprint citation while we await publication:
 
-**Monocular Depth Estimation through Virtual-world Supervision and Real-world SfM Self-Supervision** [**Arxiv**](https://arxiv.org/abs/2103.12209)
+**Monocular Depth Estimation through Virtual-world Supervision and Real-world SfM Self-Supervision.**
 
 *Akhil Gurram, Ahmet Faruk Tuna, Fengyi Shen, Onay Urfalioglu, Antonio M. López*
 
 ```bibtex
-@article{gurram2021monocular,
-  title={Monocular Depth Estimation through Virtual-world Supervision and Real-world SfM Self-Supervision},
-  author={Gurram, Akhil and Tuna, Ahmet Faruk and Shen, Fengyi and Urfalioglu, Onay and L{\'o}pez, Antonio M},
-  journal={arXiv preprint arXiv:2103.12209},
-  year={2021}
-}
+@ARTICLE{9565825,
+  author={Gurram, Akhil and Tuna, Ahmet Faruk and Shen, Fengyi and Urfalioglu, Onay and López, Antonio M.},
+  journal={IEEE Transactions on Intelligent Transportation Systems}, 
+  title={Monocular Depth Estimation Through Virtual-World Supervision and Real-World SfM Self-Supervision}, 
+  year={2021},
+  volume={},
+  number={},
+  pages={1-14},
+  doi={10.1109/TITS.2021.3117059}}
 ```
 
 Contact: akhil.gurram@e-campus.uab.cat or akhilgurram.ai@gmail.com

@@ -39,7 +39,7 @@ import numpy as np
 import torch
 import yaml
 from PIL import Image
-from matplotlib import pyplot as plt
+from matplotlib import cm, pyplot as plt
 from torch.nn import functional as F
 from torchvision import transforms
 from tqdm import tqdm
@@ -50,6 +50,7 @@ from utils import MonoDEVSOptions, convert_list2dict
 
 home = expanduser("~")
 week_num = date.today().isocalendar()[1]
+turbo = cm.get_cmap('turbo')
 
 
 def str2bool(v):
@@ -209,8 +210,7 @@ class Evaluation(object):
                 features, _ = self.models["encoder"](input_color)
                 output = self.models["depth_decoder"](features)
                 time_taken -= time.time()
-                if iter_l > 10:
-                    time_for_each_frame.append(np.abs(time_taken))
+                time_for_each_frame.append(np.abs(time_taken))
 
                 # Convert disparity into depth maps
                 pred_disp = self.invdepth_to_depth(output[("disp", 0)])
@@ -226,16 +226,21 @@ class Evaluation(object):
 
                 # Save information
                 folder_name = os.path.dirname(im_path).split('/')[-1]
-                depth_save_path = im_path.replace('/' + folder_name + '/',
-                                                  '/' + folder_name + '_' + 'depth_MonoDEVSNet' + '/'). \
+                depth_save_path = im_path.replace(folder_name + '/',
+                                                  folder_name + '_' + 'depth_MonoDEVSNet' + '/'). \
                     replace('.jpg', '.png')
                 pred_depth_o = Image.fromarray(np.array(F.interpolate(pred_depth_t,
                                                                       (height_o, width_o)).squeeze() * 256,
                                                         dtype=np.uint16))
+                pred_depth_color = Image.fromarray(np.array(turbo(F.interpolate(pred_depth_t,
+                                                                                (height_o, width_o),
+                                                                                mode='bilinear').squeeze() /
+                                                                  self.opt.max_depth)[:, :, :3] * 255, dtype=np.uint8))
 
                 if not os.path.exists(os.path.dirname(depth_save_path)):
                     os.makedirs(os.path.dirname(depth_save_path))
                 pred_depth_o.save(depth_save_path)
+                pred_depth_color.save(depth_save_path.replace('.png', '_color.png'))
 
         print('time taken for network model {}-{}: {}'.format(self.opt.models_fcn_name['encoder'], self.opt.num_layers,
                                                               1 / np.mean(time_for_each_frame)))
