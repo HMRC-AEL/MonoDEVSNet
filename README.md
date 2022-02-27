@@ -97,14 +97,6 @@ Set pretrained model path in the config file ([path](configs/hrnet_w48_vk2.yaml)
     --real_dataset kitti --syn_dataset <vk_1.0/vk_2.0> --real_data_path <path_to_real_dataset_folder> --syn_data_path <path_to_synthetic_dataset_folder>
 ```
 
-```bash
-    # For the best MonoDELSNet model - HRNet-w48 - HD RGB input image (1248, 384) - LiDAR Supervision
-    cd <MonoDEVSNet_base_path>
-    python3 monodevsnet_trainer.py --png --use_le --version <an_extension_to_model_name> --height 384 --width 1248 \
-    --models_fcn_name encoder <HRNet/ResNet/DenseNet> --num_layers <model_extension_num> \
-    --real_dataset kitti --syn_dataset kitti_depth --real_data_path <path_to_real_dataset_folder> --syn_data_path <path_to_real_dataset_folder>
-```
-
 ## Evaluation
 
 To evaluate MonoDEVSNet/MonoDELSNet models, provide the model/weights folder path and details in the command line arguments.
@@ -134,11 +126,23 @@ To run evaluation script on ***any*** images
 ```
 
 ## Models
-Download available MonoDEVSNet models from the [**link**](https://drive.google.com/drive/folders/1_Zbk6AjOcJ34ERlB8mpu5xT84ptbd1Iz?usp=sharing) and place them under MonoDEVSNet/models folder. Rename the each `MODEL` folder name, same as their config-filename.
+Download available **MonoDEVSNet** / **MonoDELSNet** pretrained models from the [**link**](https://drive.google.com/drive/folders/1_Zbk6AjOcJ34ERlB8mpu5xT84ptbd1Iz?usp=sharing) and place them under MonoDEVSNet/models folder. 
+Rename the each `MODEL` folder name, same as their config-filename.
 
 Now MonoDEVSNet framework can be trained with different network architecture. (HRNet, ResNet, DenseNet)
 
-Links to pretrained weights: [**md_file**](models/pretrained_models.md)
+### MonoDEVSNet models
+***For more pretrained models using ResNet: {18, 152},  DenseNet: {121, 161}, HRNet: {18, 32, 48} - [**link**](https://drive.google.com/drive/folders/1_Zbk6AjOcJ34ERlB8mpu5xT84ptbd1Iz?usp=sharing)*** 
+
+![img.png](media/figures/table_vi.png)
+
+
+### MonoDELSNet models
+
+| Model       |  Encoder   |  abs-rel   |     rms     |                                                 Link                                                 |    Comments    |
+|:----------: |:----------:|:----------:|:-----------:|:----------------------------------------------------------------------------------------------------:|:--------------:|
+| MonoDELSNet | ResNet 18  |  0.0614    |   2.2786    | [**Download**](https://drive.google.com/drive/folders/1LZuBsG6XFjYnVwkELMENHjwfyRyRvjEs?usp=sharing) |                |
+| MonoDELSNet | HRNet W48  | **0.0526** | **1.9596**  | [**Download**](https://drive.google.com/drive/folders/1OVayiDauhsmfpYBElvOOmViE-vqakXWR?usp=sharing) | The Best Model |
 
 ## Precomputed depth estimation results
 
