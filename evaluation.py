@@ -28,6 +28,7 @@
 # SOFTWARE.
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -41,12 +42,14 @@ import yaml
 from PIL import Image
 from matplotlib import cm, pyplot as plt
 from torch.nn import functional as F
+from torch.utils.data import DataLoader
 from torchvision import transforms
 from tqdm import tqdm
 
 import networks
-from utils import readlines
-from utils import MonoDEVSOptions, convert_list2dict
+from monodepth2.datasets import KITTIRAWDataset, KITTIDepthDataset
+from utils import get_n_params, MonoDEVSOptions, convert_list2dict, readlines
+from utils.utils_local import Dict2Struct
 
 home = expanduser("~")
 week_num = date.today().isocalendar()[1]
@@ -73,12 +76,15 @@ class MonoDEVSTestOptions(MonoDEVSOptions):
                                  type=str,
                                  help="path to real dataset, for dataset=\"any\" option provide the images folder",
                                  default="")
+        self.parser.add_argument("--do_kb_crop",
+                                 help="decide to crop the region defined by KITTI benchmark or not",
+                                 action="store_true")
         self.options = []
 
     def parse(self):
         self.options = self.parser.parse_args()
         if self.options.load_weights_folder is None:
-            self.options.load_weights_folder = os.path.join('models', 'hrnet_w48_vk2')  # The Best model path
+            self.options.load_weights_folder = os.path.join('models', self.options.config)  # The Best model path
 
         changed_names = convert_list2dict(self.options.models_fcn_name)
         default_class = {"encoder": "HRNet", "depth_decoder": "DepthDecoder",
@@ -119,6 +125,17 @@ class Evaluation(object):
         # Load experiments options/parameters
         self.opt = opt
         self.model_name = model_name
+        try:
+            with open(os.path.join(self.opt.load_weights_folder, 'opt.json')) as file:
+                self.opt_from_load_path = Dict2Struct(**json.load(file))
+            self.opt.height = self.opt_from_load_path.height
+            self.opt.width = self.opt_from_load_path.width
+            self.opt.min_depth = self.opt_from_load_path.min_depth
+            self.opt.max_depth = self.opt_from_load_path.max_depth
+            self.opt.num_layers = self.opt_from_load_path.num_layers
+        except Exception as e:
+            print(e)
+
         self.opt.trainer_name = 'trainer.py'
 
         torch.autograd.set_detect_anomaly(False)
@@ -127,8 +144,6 @@ class Evaluation(object):
         assert self.opt.height % 32 == 0, "'height' must be a multiple of 32"
         assert self.opt.width % 32 == 0, "'width' must be a multiple of 32"
         assert self.opt.load_weights_folder is not None, "load weight folder path shouldn\'t be empty, provide path"
-        if self.opt.dataset == 'kitti':
-            assert self.opt.image_folder_path != '', "kitti base folder path shouldn\'t be empty, provide path"
 
         self.models = {}
 
@@ -160,28 +175,42 @@ class Evaluation(object):
         if self.model_name is None:
             self.model_name = self.opt.models_fcn_name['encoder'] + '_' + str(self.opt.num_layers)
         print('Exp name: {}'.format(model_name))
+
         print("\nFiles are saved to:\n  ", self.opt.log_dir)
         print("Running scripts on :  ", self.device)
+        print("Number of parameters for each model")
+        for model_name, model in self.models.items():
+            print('{:^15}: {:>5.2f} M'.format(model_name, get_n_params(model) / 1000000))
 
         # Images path list
+        img_ext = '.png' if self.opt.png else '.jpg'
         self.im_path_list = []
         if self.opt.dataset == 'kitti':
-            self.side_map = {"2": 2, "3": 3, "l": 2, "r": 3}
-            filenames = readlines(os.path.join(self.opt.base_path, "splits", "eigen", "test_files.txt"))
-            for line in filenames:
-                folder, frame_index, side = line.split(' ')
-                f_str = "{:010d}{}".format(int(frame_index), '.png')
-                image_path = os.path.join(self.opt.image_folder_path, folder,
-                                          "image_0{}/data".format(self.side_map[side]), f_str)
-                self.im_path_list.append(image_path)
+            real_eigen = readlines(os.path.join(os.path.dirname(__file__), "splits", "eigen", "test_files.txt"))
+            dataset = KITTIRAWDataset(data_path=self.opt.real_data_path, filenames=real_eigen,
+                                      height=self.opt.height, width=self.opt.width,
+                                      frame_idxs=[0], num_scales=4, is_train=False,
+                                      img_ext=img_ext)
+            self.dataloader = DataLoader(dataset, self.opt.batch_size, shuffle=False, num_workers=opt.num_workers,
+                                         pin_memory=True, drop_last=False)
+            print('Total number of images in {} dataset: {}'.format(self.opt.dataset, dataset.__len__()))
+        if self.opt.dataset == 'kitti_depth':
+            real_eigen = readlines(os.path.join(os.path.dirname(__file__), "splits", "eigen", "test_files.txt"))
+            dataset = KITTIDepthDataset(data_path=self.opt.real_data_path, filenames=real_eigen,
+                                        height=self.opt.height, width=self.opt.width,
+                                        frame_idxs=[0], num_scales=4, is_train=False,
+                                        img_ext=img_ext)
+            self.dataloader = DataLoader(dataset, self.opt.batch_size, shuffle=False, num_workers=opt.num_workers,
+                                         pin_memory=True, drop_last=False)
+            print('Total number of images in {} dataset: {}'.format(self.opt.dataset, dataset.__len__()))
         elif self.opt.dataset == 'any':
             for base_path, base_folder, file_paths in os.walk(self.opt.image_folder_path):
                 for file_path in sorted(file_paths):
                     if file_path.endswith('.png') or file_path.endswith('.jpg'):
                         self.im_path_list.append(os.path.join(base_path, file_path))
+            print('Total number of images in {} dataset: {}'.format(self.opt.dataset, len(self.im_path_list)))
         else:
             raise RuntimeError('Choose dataset to test MonoDEVSNet model')
-        print('Total number of images in {} dataset: {}'.format(self.opt.dataset, len(self.im_path_list)))
 
         self.rgbs, self.pred_depths, self.gt_depths = [], [], []
         self.resize = transforms.Resize((self.opt.height, self.opt.width), interpolation=Image.ANTIALIAS)
@@ -255,9 +284,18 @@ class Evaluation(object):
     def eval_local(self):
         errors_absolute, errors_relative, ratios, time_taken, time_for_each_frame, total_time = \
             [], [], [], time.time(), [], time.time()
+        data_iter, total_invalid_images, iter_l = iter(self.dataloader), 0, -1
         with torch.no_grad():
-            for iter_l, im_path in tqdm(enumerate(self.im_path_list)):
-                input_color, input_im_np = self.load_rgb_image(im_path)
+            for __ in tqdm(range(self.dataloader.__len__())):
+                try:
+                    data = data_iter.__next__()
+                    iter_l += 1
+                except Exception as _:
+                    total_invalid_images += 1
+                    continue
+
+                # Related to depth, segmentation, edges
+                input_color = data[("color", 0, 0)].to(self.device)
 
                 time_taken = time.time()
                 features, _ = self.models["encoder"](input_color)
@@ -270,46 +308,64 @@ class Evaluation(object):
                 pred_disp = pred_disp[0, 0].cpu().numpy()
                 pred_depth_raw = 3. / pred_disp.copy()
 
-                if self.opt.dataset == 'kitti':
-                    gt_depth = self.gt_depths[iter_l]
-                    gt_height, gt_width = gt_depth.shape
-                    pred_disp = cv2.resize(pred_disp, (gt_width, gt_height), cv2.INTER_NEAREST)
-                    pred_depth = 3. / pred_disp.copy()
+                if 'kitti' in self.opt.dataset:
+                    if self.opt.dataset == 'kitti_depth':
+                        self.gt_depths.append(data['depth_gt'][0, 0].cpu().numpy())
 
-                    # Eigen crop
-                    mask = np.logical_and(gt_depth > self.opt.min_depth, gt_depth < self.opt.max_depth)
-                    crop = np.array([0.40810811 * gt_height, 0.99189189 * gt_height,
-                                     0.03594771 * gt_width, 0.96405229 * gt_width]).astype(np.int32)
-                    crop_mask = np.zeros(mask.shape)
-                    crop_mask[crop[0]:crop[1], crop[2]:crop[3]] = 1
-                    mask = np.logical_and(mask, crop_mask)
+                gt_depth = self.gt_depths[iter_l]
+                gt_height, gt_width = gt_depth.shape
+                pred_disp = cv2.resize(pred_disp, (gt_width, gt_height), cv2.INTER_NEAREST)
+                pred_depth = self.opt.syn_scaling_factor / pred_disp.copy()
 
-                    gt_depth[gt_depth < self.opt.min_depth] = self.opt.min_depth
-                    gt_depth[gt_depth > self.opt.max_depth] = self.opt.max_depth
-                    pred_depth[pred_depth < self.opt.min_depth] = self.opt.min_depth
-                    pred_depth[pred_depth > self.opt.max_depth] = self.opt.max_depth
+                if self.opt.do_kb_crop:
+                    crop_height, crop_width = 352, 1216
+                    if gt_height == 192 or gt_width == 640:
+                        crop_height, crop_width = int(crop_height / 2), int(crop_width / 2)
 
-                    errors_absolute.append(compute_errors(gt_depth[mask], pred_depth[mask]))
+                    # AdaBins setting
+                    top_margin, left_margin = gt_height - crop_height, int((gt_width - crop_width) / 2)
+                    pred_depth = pred_depth[top_margin:top_margin + crop_height, left_margin:left_margin + crop_width]
+                    gt_depth = gt_depth[top_margin:top_margin + crop_height, left_margin:left_margin + crop_width]
+                else:
+                    top_margin, left_margin = 0, 0
+                    crop_height, crop_width = gt_depth.shape
+
+                # Eigen crop
+                mask = np.logical_and(gt_depth > self.opt.min_depth, gt_depth < self.opt.max_depth)
+                crop = np.array([0.40810811 * gt_height, 0.99189189 * gt_height,
+                                 0.03594771 * gt_width, 0.96405229 * gt_width]).astype(np.int32)
+                crop_mask = np.zeros(mask.shape)
+                crop_mask[crop[0]:crop[1], crop[2]:crop[3]] = 1
+                mask = np.logical_and(mask, crop_mask)
+
+                gt_depth[gt_depth < self.opt.min_depth] = self.opt.min_depth
+                gt_depth[gt_depth > self.opt.max_depth] = self.opt.max_depth
+                pred_depth[pred_depth < self.opt.min_depth] = self.opt.min_depth
+                pred_depth[pred_depth > self.opt.max_depth] = self.opt.max_depth
+
+                errors_absolute.append(compute_errors(gt_depth[mask], pred_depth[mask]))
 
                 # save resized rgb,and raw pred depth
                 self.rgbs.append(input_color.squeeze().cpu().permute(1, 2, 0).numpy().copy())
                 self.pred_depths.append(pred_depth_raw)
 
-            if self.opt.dataset == 'kitti':
-                errors_absolute = np.array(errors_absolute).mean(0)
+        if 'kitti' in self.opt.dataset:
+            errors_absolute = np.array(errors_absolute).mean(0)
 
-                print('\n  \n  for 80 meters - MonoDEVSNet Absolute depth estimation results '
-                      'fps: {}'.format(1 / np.mean(time_for_each_frame)))
-                print("  " + ("{:>8} | " * 7).format("abs_rel", "sq_rel", "rmse", "rmse_log", "a1", "a2", "a3"))
-                print(("&{: 8.4f}  " * 7).format(*errors_absolute.tolist()) + "\\\\")
-                torch.save({'rgbs': self.rgbs, 'pred_depths': self.pred_depths},
-                           os.path.join(self.opt.log_dir, 'monoDEVSNet_kitti_eigen_test_split_' + self.model_name +
-                                        '_' + self.opt.version + '.pth'))
-            else:
-                torch.save({'rgbs': self.rgbs, 'pred_depths': self.pred_depths},
-                           os.path.join(self.opt.log_dir, 'any_data.pth'))
+            print('\n  \n  for {} meters - MonoDEVSNet Absolute depth estimation results '
+                  'fps: {}, total time taken: {:4.4} (in mins) invalid images: {} kb_crop: {} dataset: {}'.
+                  format(self.opt.max_depth, 1 / np.mean(time_for_each_frame), (time.time() - total_time) / 60,
+                         total_invalid_images, str(self.opt.do_kb_crop), self.opt.dataset))
+            print("  " + ("{:>8} | " * 7).format("abs_rel", "sq_rel", "rmse", "rmse_log", "a1", "a2", "a3"))
+            print(("&{: 8.4f}  " * 7).format(*errors_absolute.tolist()) + "\\\\")
+            torch.save({'rgbs': self.rgbs, 'pred_depths': self.pred_depths},
+                       os.path.join(self.opt.log_dir, 'monoDEVSNet_kitti_eigen_test_split_' + self.model_name +
+                                    '_' + self.opt.version + '.pth'))
+        else:
+            torch.save({'rgbs': self.rgbs, 'pred_depths': self.pred_depths},
+                       os.path.join(self.opt.log_dir, 'any_data.pth'))
 
-            return errors_absolute, errors_relative
+        return errors_absolute, errors_relative
 
     def load_rgb_image(self, file_path):
         if self.opt.dataset == 'kitti' or self.opt.dataset == 'any':

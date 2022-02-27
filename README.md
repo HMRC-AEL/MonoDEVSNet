@@ -75,6 +75,11 @@ You can download the entire Virtual KITTI [*1.3*](https://europe.naverlabs.com/r
     tar -xvf vkitti_2.0.3_classSegmentation.tar
 ```
 
+## New model - MonoDELSNet
+Monocular Depth Estimation through LiDAR Supervision and Real-world SfM Self-Supervision. \
+In this variant, we replace the supervision coming from the virtual data to supervision coming from LiDAR
+data, this is why we use the term MonoDELSNet instead of MonoDEVSNet. 
+
 
 ## Training
 
@@ -85,24 +90,41 @@ By default models and tensorboard event files are saved to ~/tmp/<model_name>. T
 Set pretrained model path in the config file ([path](configs/hrnet_w48_vk2.yaml)) (if necessary download models from [link](https://github.com/HRNet/HRNet-Image-Classification))
 
 ```bash
+    # MonoDEVSNet
     cd <MonoDEVSNet_base_path>
     python3 monodevsnet_trainer.py --png --use_dc --use_le --use_ms --version <an_extension_to_model_name> \
     --models_fcn_name encoder <HRNet/ResNet/DenseNet> --num_layers <model_extension_num> \
     --real_dataset kitti --syn_dataset <vk_1.0/vk_2.0> --real_data_path <path_to_real_dataset_folder> --syn_data_path <path_to_synthetic_dataset_folder>
 ```
 
+```bash
+    # For the best MonoDELSNet model - HRNet-w48 - HD RGB input image (1248, 384) - LiDAR Supervision
+    cd <MonoDEVSNet_base_path>
+    python3 monodevsnet_trainer.py --png --use_le --version <an_extension_to_model_name> --height 384 --width 1248 \
+    --models_fcn_name encoder <HRNet/ResNet/DenseNet> --num_layers <model_extension_num> \
+    --real_dataset kitti --syn_dataset kitti_depth --real_data_path <path_to_real_dataset_folder> --syn_data_path <path_to_real_dataset_folder>
+```
 
 ## Evaluation
 
-To evaluate MonoDEVSNet models, provide the model/weights folder path and details in the command line arguments.
+To evaluate MonoDEVSNet/MonoDELSNet models, provide the model/weights folder path and details in the command line arguments.
 
-To run evaluation script on [***KITTI***](http://www.cvlibs.net/datasets/kitti/raw_data.php) [*Eigen*](splits/eigen/test_files.txt) split
+To run evaluation script on [***KITTI***](http://www.cvlibs.net/datasets/kitti/raw_data.php) [*Eigen*](splits/eigen/test_files.txt) split with **original depth maps** extracted from raw LiDAR sensor. 
 ```bash
-    python3 evaluation.py --dataset <kitti> --models_fcn_name encoder <HRNet/ResNet/DenseNet> --num_layers <model_extension_num> \ 
-    --image_folder_path <KITTI_RAW_Dataset_folder_path> \ 
-    --load_weights_folder <path_to_MonoDEVSNet_models> \    
+    python3 evaluation.py --png --dataset kitti --batch_size 1 \ 
+    --models_fcn_name encoder <HRNet/ResNet/DenseNet> --num_layers <model_extension_num> \ 
+    --real_data_path <KITTI_RAW_Dataset_base_folder_path> --load_weights_folder <path_to_MonoDEVSNet_models> \    
     [--version <add_extension_to_save_the_file(rgbs/predicted_depth_maps)>](optional)
 ```
+
+To run evaluation script on [***KITTI***](http://www.cvlibs.net/datasets/kitti/raw_data.php) [*Eigen*](splits/eigen/test_files.txt) split with **improved (annotated) depth maps.**
+```bash
+    python3 evaluation.py --png --dataset kitti_depth --batch_size 1 --do_kb_crop \ 
+    --models_fcn_name encoder <HRNet/ResNet/DenseNet> --num_layers <model_extension_num> \ 
+    --real_data_path <KITTI_RAW_Dataset_base_folder_path> --load_weights_folder <path_to_MonoDELSNet_models> \    
+    [--version <add_extension_to_save_the_file(rgbs/predicted_depth_maps)>](optional)
+```
+
 
 To run evaluation script on ***any*** images 
 ```bash

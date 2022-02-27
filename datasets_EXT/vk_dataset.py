@@ -154,8 +154,7 @@ class DepthDataset(data.Dataset):
             self.contrast = (0.8, 1.2)
             self.saturation = (0.8, 1.2)
             self.hue = (-0.1, 0.1)
-            transforms.ColorJitter.get_params(
-                self.brightness, self.contrast, self.saturation, self.hue)
+            transforms.ColorJitter(self.brightness, self.contrast, self.saturation, self.hue)
         except TypeError:
             self.brightness = 0.2
             self.contrast = 0.2
@@ -259,8 +258,7 @@ class DepthDataset(data.Dataset):
             inputs[("inv_K", scale)] = torch.from_numpy(inv_K)
 
         if do_color_aug:
-            color_aug = transforms.ColorJitter.get_params(
-                self.brightness, self.contrast, self.saturation, self.hue)
+            color_aug = transforms.ColorJitter(self.brightness, self.contrast, self.saturation, self.hue)
         else:
             color_aug = (lambda x: x)
 
@@ -296,7 +294,7 @@ class DepthDataset(data.Dataset):
                 (self.height, self.width)).long().squeeze(0)
 
             # semantic edges
-            edges = kornia.laplacian(inputs["segm_gt", 0, 0].unsqueeze(0).float(), kernel_size=5).squeeze(0)
+            edges = kornia.filters.laplacian(inputs["segm_gt", 0, 0].unsqueeze(0).float(), kernel_size=5).squeeze(0)
             inputs[("segm_edges", 0, 0)] = (edges[0] > 0.1).long()
 
         if "s" in self.frame_ids:
@@ -307,7 +305,7 @@ class DepthDataset(data.Dataset):
 
             inputs["stereo_T"] = torch.from_numpy(stereo_T)
 
-        edges = kornia.laplacian(inputs["color_aug", 0, 0].unsqueeze(0).float(), kernel_size=5)
+        edges = kornia.filters.laplacian(inputs["color_aug", 0, 0].unsqueeze(0).float(), kernel_size=5)
         edges = edges / edges.max()
         inputs[("edges", 0, 0)] = (edges[0, 0] > 0.1).long()
 

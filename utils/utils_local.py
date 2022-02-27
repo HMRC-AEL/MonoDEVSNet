@@ -79,3 +79,10 @@ def get_n_params(model):
             nn = nn * s
         pp += nn
     return pp
+
+
+class Dict2Struct:
+    def __init__(self, **entries):
+        self.__dict__.update(entries)
+
+

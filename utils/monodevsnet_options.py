@@ -113,7 +113,7 @@ class MonoDEVSOptions(MonodepthOptions):
                                  type=str,
                                  help="dataset to train on",
                                  default="vk_2.0",
-                                 choices=["vk_1.0", "vk_2.0"])
+                                 choices=["vk_1.0", "vk_2.0", "kitti_depth"])
         self.parser.add_argument("--total_number_of_images_for_training",
                                  help="Total number of images used for training from synthetic and real images",
                                  type=int,
